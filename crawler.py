@@ -9,7 +9,8 @@ import re
 from collections import deque
 import ssl
 
-FILETYPES = [".html", ".htm", ".asp", ".aspx", ".php", ".jsp", ".jspx", "/"]
+#FILETYPES = [".html", ".htm", ".asp", ".aspx", ".php", ".jsp", ".jspx", "/"]
+CONTENT_TYPES = ["text/html", "application/xhtml+xml", "application/xml"]
 
 home_url = "https://www.uky.edu/"
 frontier = deque([home_url]) # Queue of URLs to crawl
@@ -26,33 +27,28 @@ rp = urllib.robotparser.RobotFileParser()
 rp.set_url(home_url + "robots.txt")
 rp.read()
 
-# Fix //english.as.uky.edu/ - use urlparse?? followed by urlunparse??
-
 def crawl():
 	crawl_counter = 0
 	context = ssl._create_unverified_context()
 	while len(frontier) > 0:
 		url = frontier.popleft()
 		url_no_scheme = urlunparse(urlparse(url)._replace(scheme=""))
-		if not was_visited(url_no_scheme):
+		if url_no_scheme not in visited:
 			try:
-				with urllib.request.urlopen(url, context=context) as response:
-				   html = response.read()
+				with urllib.request.urlopen(url, context=context, timeout=3) as response:
+					headers = dict(response.info())
+					header_dict = {key.lower() : val for key, val in headers.items()}
+					content_type = header_dict["content-type"].partition(";")[0]
+					if content_type in CONTENT_TYPES:
+						html = response.read()
+						page_links = parse_links(html, urlparse(url).scheme)
+						frontier.extend(page_links)
+						crawl_counter += 1
+						print(str(crawl_counter) + ": " + url)
 			except Exception as e:
 				print("ERROR while fetching " + url)
 				print(e)
-			else:
-				page_links = parse_links(html, urlparse(url).scheme)
-				frontier.extend(page_links)
-				crawl_counter += 1
-				print(str(crawl_counter) + ": " + url)
 			visited.append(url_no_scheme)
-
-def was_visited(link):
-	for visited_link in visited:
-		if visited_link == link:
-			return True
-	return False
 
 def rel_to_abs_url(url, protocol):
 	url_scheme = urlparse(url).scheme
@@ -73,11 +69,12 @@ def parse_links(html, protocol):
 	soup = BeautifulSoup(html, 'html.parser')
 	for element in soup.find_all('a', href=True):
 		link = rel_to_abs_url(element.get('href'), protocol)
-		if link is not None and len(link) <= 200:
-			for filetype in FILETYPES:
-				if link.endswith(filetype) and rp.can_fetch("*", link):
-					links.append(link)
-					break
+		if link is not None and len(link) <= 200 and rp.can_fetch("*", link):
+			links.append(link)
+			#for filetype in FILETYPES:
+				#if link.endswith(filetype) and rp.can_fetch("*", link):
+					#links.append(link)
+					#break
 	return links
 
 crawl()
