@@ -36,9 +36,10 @@ def crawl():
 		if url_no_scheme not in visited:
 			try:
 				with urllib.request.urlopen(url, context=context, timeout=3) as response:
-					headers = dict(response.info())
-					header_dict = {key.lower() : val for key, val in headers.items()}
-					content_type = header_dict["content-type"].partition(";")[0]
+					#headers = dict(response.info())
+					#header_dict = {key.lower() : val for key, val in headers.items()}
+					#content_type = header_dict["content-type"].partition(";")[0]
+					content_type = process_headers(dict(response.info()))
 					if content_type in CONTENT_TYPES:
 						html = response.read()
 						page_links = parse_links(html, urlparse(url).scheme)
@@ -49,6 +50,14 @@ def crawl():
 				print("ERROR while fetching " + url)
 				print(e)
 			visited.append(url_no_scheme)
+
+def process_headers(headers):
+	try:
+		header_dict = {key.lower() : val for key, val in headers.items()}
+		content_type = header_dict["content-type"].partition(";")[0]
+		return content_type
+	except Exception as e:
+		return None
 
 def rel_to_abs_url(url, protocol):
 	url_scheme = urlparse(url).scheme
