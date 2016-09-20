@@ -5,17 +5,19 @@ import urllib.request
 import urllib.robotparser
 from bs4 import BeautifulSoup # pip install beautifulsoup4
 from urllib.parse import urljoin, urlparse, urlunparse
-import re
+import re, ssl, csv
 from collections import deque
-import ssl
 
+# http://ukcc.uky.edu/cgi-bin/phq?def=uk&field=name&value=LASTNAME,+FIRSTNAME+MI
+# http://uknowledge.uky.edu/do/search/?q=author_lname%3A%22Ahammed%22%20AND%20author_fname%3A%22Z.%22&sort=date_desc&fq=ancestor_key:1674591
 #FILETYPES = [".html", ".htm", ".asp", ".aspx", ".php", ".jsp", ".jspx", "/"]
 CONTENT_TYPES = ["text/html", "application/xhtml+xml", "application/xml"]
 
 home_url = "https://www.uky.edu/"
 frontier = deque([home_url]) # Queue of URLs to crawl
-visited = [] # List of visited URLs
+visited = set() # List of visited URLs
 visited_subdomains = [] # List of visited subdomains
+filetypes = {}
 
 # Regex checking if URL is absolute
 abs_url_regex = re.compile("^(?:[a-z]+:)?", re.IGNORECASE)
@@ -28,7 +30,9 @@ rp.set_url(home_url + "robots.txt")
 rp.read()
 
 def crawl():
+
 	crawl_counter = 0
+
 	context = ssl._create_unverified_context()
 	while len(frontier) > 0:
 		url = frontier.popleft()
@@ -44,12 +48,12 @@ def crawl():
 						html = response.read()
 						page_links = parse_links(html, urlparse(url).scheme)
 						frontier.extend(page_links)
-						crawl_counter += 1
-						print(str(crawl_counter) + ": " + url)
+					crawl_counter += 1
+					increment_filetype(content_type.lower())
+					log_entry(url, content_type.lower(), None, crawl_counter)
 			except Exception as e:
-				print("ERROR while fetching " + url)
-				print(e)
-			visited.append(url_no_scheme)
+				log_entry(url, None, e, crawl_counter)
+			visited.add(url_no_scheme)
 
 def process_headers(headers):
 	try:
@@ -58,6 +62,32 @@ def process_headers(headers):
 		return content_type
 	except Exception as e:
 		return None
+
+def increment_filetype(content_type):
+	if content_type in list(filetypes.keys()):
+		filetypes[content_type] += 1;
+	else:
+		filetypes[content_type] = 1;
+
+# def log_entry(url, content_type, error, crawl_counter):
+# 	if error is None:
+# 		print(str(crawl_counter) + ": " + url + " " + content_type + " #" + str(filetypes[content_type]))
+# 	else:
+# 		print("ERROR while fetching " + url)
+# 		print(error)
+
+def log_entry(url, content_type, error, crawl_counter):
+	with open('log.csv', 'w', newline='') as csvfile:
+		log_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+		if error is None:
+			print(str(crawl_counter) + ": " + url + " " + content_type + " #" + str(filetypes[content_type]))
+			log_writer.writerow([url, "", str(crawl_counter), content_type, str(filetypes[content_type])])
+		else:
+			print("ERROR while fetching " + url)
+			print(error)
+			log_writer.writerow([url, "Error", "", "", ""])
+
 
 def rel_to_abs_url(url, protocol):
 	url_scheme = urlparse(url).scheme
