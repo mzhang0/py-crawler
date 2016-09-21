@@ -8,9 +8,6 @@ from urllib.parse import urljoin, urlparse, urlunparse
 import re, ssl, csv, time, os
 from collections import deque
 
-start_time = time.time()
-# http://ukcc.uky.edu/cgi-bin/phq?def=uk&field=name&value=LASTNAME,+FIRSTNAME+MI
-# http://uknowledge.uky.edu/do/search/?q=author_lname%3A%22Ahammed%22%20AND%20author_fname%3A%22Z.%22&sort=date_desc&fq=ancestor_key:1674591
 #FILETYPES = [".html", ".htm", ".asp", ".aspx", ".php", ".jsp", ".jspx", "/"]
 CONTENT_TYPES = ["text/html", "application/xhtml+xml", "application/xml"]
 
@@ -20,6 +17,7 @@ visited = set() # List of visited URLs
 visited_subdomains = [] # List of visited subdomains
 filetypes = {}
 log_entries = []
+crawl_counter = 0
 
 # Regex checking if URL is absolute
 abs_url_regex = re.compile("^(?:[a-z]+:)?", re.IGNORECASE)
@@ -35,32 +33,31 @@ csvfile = open('log.csv', 'w')
 log_writer = csv.writer(csvfile, delimiter=',')
 
 def crawl():
-	crawl_counter = 0
+	global crawl_counter
 	context = ssl._create_unverified_context()
 	while len(frontier) > 0:
 		url = frontier.popleft()
 		url_no_scheme = urlunparse(urlparse(url)._replace(scheme=""))
 		if url_no_scheme not in visited:
 			try:
-				with urllib.request.urlopen(url, context=context, timeout=3) as response:
+				with urllib.request.urlopen(url, context=context, timeout=2) as response:
 					content_type = process_headers(dict(response.info()))
 					if content_type in CONTENT_TYPES:
 						html = response.read()
 						page_links = parse_links(html, urlparse(url).scheme)
 						frontier.extend(page_links)
 			except Exception as e:
-				log_entry(time.strftime('%a %H:%M:%S'), url, None, e, crawl_counter)
+				log_entry(time.strftime('%a %H:%M:%S'), url, None, e)
 			else:
 				crawl_counter += 1
 				increment_filetype(content_type.lower())
-				log_entry(time.strftime('%a %H:%M:%S'), url, content_type.lower(), None, crawl_counter)
+				log_entry(time.strftime('%a %H:%M:%S'), url, content_type.lower(), None)
 
 			visited.add(url_no_scheme)
-	print_stats(crawl_counter)
+	print_stats()
 
-def print_stats(crawl_count):
-	if crawl_count is not None:
-		print("Pages crawled: " + str(crawl_count))
+def print_stats():
+	print("Pages crawled: " + str(crawl_counter))
 	print("Filetypes:")
 	for filetype in list(filetypes.keys()):
 		print("\t" + filetype + ": " + str(filetypes[filetype]))
@@ -81,16 +78,7 @@ def increment_filetype(content_type):
 	else:
 		filetypes[content_type] = 1;
 
-# def log_entry(url, content_type, error, crawl_counter):
-# 	if error is None:
-# 		print(str(crawl_counter) + ": " + url + " " + content_type + " #" + str(filetypes[content_type]))
-# 		log_writer.writerow([url, "", str(crawl_counter), content_type, str(filetypes[content_type])])
-# 	else:
-# 		print("ERROR while fetching " + url)
-# 		print(error)
-# 		log_writer.writerow([url, "Error", "", "", ""])
-
-def log_entry(timestamp, url, content_type, error, crawl_counter):
+def log_entry(timestamp, url, content_type, error):
 	if error is None:
 		print(str(crawl_counter) + ": " + url + " " + content_type + " #" + str(filetypes[content_type]))
 		log_entries.append([timestamp, url, "", str(crawl_counter), content_type, str(filetypes[content_type])])
@@ -124,7 +112,9 @@ def parse_links(html, protocol):
 	for element in soup.find_all('a', href=True):
 		link = rel_to_abs_url(element.get('href'), protocol)
 		if link is not None and len(link) <= 200 and rp.can_fetch("*", link):
-			links.append(link)
+			parsed_link = urlparse(link)
+			if len(parsed_link.query) == 0 and len(parsed_link.fragment) == 0:
+				links.append(link)
 	return links
 
 try:
@@ -135,4 +125,4 @@ finally:
 	for entry in log_entries:
 		log_writer.writerow(entry)
 	csvfile.close()
-	print_stats(None)
+	print_stats()
