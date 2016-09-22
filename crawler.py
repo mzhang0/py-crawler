@@ -1,20 +1,18 @@
-# Python 3.x.x
+#!/usr/bin/python
 
 from html.parser import HTMLParser
 import urllib.request
 import urllib.robotparser
 from bs4 import BeautifulSoup # pip install beautifulsoup4
 from urllib.parse import urljoin, urlparse, urlunparse
-import re, ssl, csv, time, os
+import re, ssl, csv, time, os, sys
 from collections import deque
 
-#FILETYPES = [".html", ".htm", ".asp", ".aspx", ".php", ".jsp", ".jspx", "/"]
 CONTENT_TYPES = ["text/html", "application/xhtml+xml", "application/xml"]
 
 home_url = "https://www.uky.edu/"
 frontier = deque([home_url]) # Queue of URLs to crawl
 visited = set() # List of visited URLs
-visited_subdomains = [] # List of visited subdomains
 filetypes = {}
 log_entries = []
 crawl_counter = 0
@@ -29,7 +27,7 @@ rp = urllib.robotparser.RobotFileParser()
 rp.set_url(home_url + "robots.txt")
 rp.read()
 
-csvfile = open('log.csv', 'w')
+csvfile = open("output" + os.sep + "log.csv", 'w')
 log_writer = csv.writer(csvfile, delimiter=',')
 
 def crawl():
@@ -50,17 +48,38 @@ def crawl():
 				log_entry(time.strftime('%a %H:%M:%S'), url, None, e)
 			else:
 				crawl_counter += 1
-				increment_filetype(content_type.lower())
-				log_entry(time.strftime('%a %H:%M:%S'), url, content_type.lower(), None)
-
+				try:
+					content_type = content_type.lower()
+					increment_filetype(content_type)
+					log_entry(time.strftime('%a %H:%M:%S'), url, content_type, None)
+				except TypeError:
+					print("Error with content-type")
 			visited.add(url_no_scheme)
 	print_stats()
 
+def dump_info():
+	with open("output" + os.sep + "frontier.txt", 'w') as frontier_f:
+		for url in frontier:
+			frontier_f.write(url + '\n')
+	with open("output" + os.sep + "visited.txt", 'w') as visited_f:
+		for url in visited:
+			visited_f.write(url + '\n')
+	with open("output" + os.sep + "counter.txt", 'w') as counter_f:
+		counter_f.write(str(crawl_counter) + '\n')
+	with open("output" + os.sep + "filetypes.txt", 'w') as filetypes_f:
+		for ft in list(filetypes.keys()):
+			filetypes_f.write(ft + ',' + str(filetypes[ft]) + '\n')
+
 def print_stats():
-	print("Pages crawled: " + str(crawl_counter))
+	counter_msg = "Pages crawled: " + str(crawl_counter)
+	print(counter_msg)
 	print("Filetypes:")
-	for filetype in list(filetypes.keys()):
-		print("\t" + filetype + ": " + str(filetypes[filetype]))
+	with open("output" + os.sep + "stats.txt", 'w') as stats_f:
+		stats_f.write(counter_msg + '\n\n')
+		for ft in list(filetypes.keys()):
+			ft_msg = ft + ": " + str(filetypes[ft])
+			print("\t" + ft_msg)
+			stats_f.write(ft_msg + '\n')
 
 def process_headers(headers):
 	try:
@@ -94,16 +113,16 @@ def log_entry(timestamp, url, content_type, error):
 
 def rel_to_abs_url(url, protocol):
 	url_scheme = urlparse(url).scheme
-
+	url_netloc = urlparse(url).netloc
 	if abs_url_regex.match(url) is None: # URL is relative
 		return urljoin(home_url, url)
 	elif cur_protocol_regex.match(url) is not None:
 		return urljoin(protocol + ":", url)
 	elif url_scheme != "http" and url_scheme != "https": # HTTP(S) schemes only
 		return None
-	elif "uky.edu" in url:
+	elif "uky.edu" in url_netloc:
 		return url
-	else: # URL is NOT part of the UKY domain
+	else:
 		return None
 
 def parse_links(html, protocol):
@@ -126,3 +145,5 @@ finally:
 		log_writer.writerow(entry)
 	csvfile.close()
 	print_stats()
+	dump_info()
+	sys.exit()
