@@ -1,10 +1,10 @@
 ### Requirements
 	
-Python 3.x.x
-BeautifulSoup (pip install beautifulsoup4)
-lxml parser (pip install lxml)
+Python 3
 
-If lxml cannot be installed, change PARSER in crawler&#46;py to "html.parser"
+Beautiful Soup
+
+lxml Parser
 
 ### Usage
 
@@ -36,3 +36,5 @@ $ python crawler.py recovery
 If the crawler crashes or if you interrupt the program via CTRL+C, then the contents of the frontier, visited list, subdomains list, crawl counter, and filetypes dictionary are dumped into .txt files at the output directory.
 
 Logs are periodically written to log.csv which can also be found in the output directory once the crawl begins.
+
+If lxml cannot be installed, change PARSER in crawler&#46;py to "html.parser"

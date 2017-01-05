@@ -82,10 +82,10 @@ def process_headers(headers):
 			content_type = header_dict['content-type'].partition(';')[0]
 			return content_type
 		else:
-			return 'n'
+			return None
 	except Exception as e:
 		print(e)
-		return 'n'
+		return None
 
 # Converts any relative URLs to absolute URLs
 def rel_to_abs_url(url, protocol):
